@@ -26,7 +26,7 @@ def changeicon(percent):
         i += 1
         if i == 1:
             killid = num
-            os.system("sudo kill " + killid)		
+            os.system("kill " + killid)		
 
 def changeled(x):
     if LEDS == 1:
@@ -39,7 +39,7 @@ def changeled(x):
 
 def endProcess(signalnum = None, handler = None):
     GPIO.cleanup()
-    os.system("sudo killall pngview");
+    os.system("killall pngview");
     exit(0)
 
 def initPins():
@@ -87,7 +87,7 @@ while True:
             changeicon("0")
             changeled("red")
             if CLIPS == 1:
-	        os.system("/usr/bin/omxplayer --no-osd --layer 999999  " + ICONPATH + "/lowbattshutdown.mp4 --alpha 160;sudo shutdown -h now")
+	        os.system("/usr/bin/omxplayer --no-osd --layer 999999  " + ICONPATH + "/lowbattshutdown.mp4 --alpha 160;shutdown -h now")
         status = 0
     elif ret < ADC25:
         if status != 25:
