@@ -3,8 +3,8 @@
 # just some bitbang code for testing all 8 channels
 
 import RPi.GPIO as GPIO, time, os
+from config import *
 
-DEBUG = 1
 GPIO.setmode(GPIO.BOARD)
 
 # this function is not used, its for future reference!
@@ -67,12 +67,6 @@ def readadc(adcnum, clockpin, mosipin, misopin, cspin):
 
 	adcout /= 2       # first bit is 'null' so drop it
 	return adcout
-	
-# change these as desired 
-SPICLK = 23
-SPIMISO = 21
-SPIMOSI = 19 
-SPICS = 24
 
 # set up the SPI interface pins 
 GPIO.setup(SPIMOSI, GPIO.OUT)

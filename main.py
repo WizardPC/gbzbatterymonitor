@@ -1,41 +1,78 @@
 #!/usr/bin/python
 import RPi.GPIO as GPIO
 import time
-import array
 import os
 import signal
 import subprocess
-import math
 from subprocess import check_output
 
-from config import *
 from mcp3008 import *
 
-warning = 0
-status = 0
+WARNING = 0
+STATUS = 0
+
+# Get the screen resolution on X and Y axis
+XRESOLUTION = int(check_output("fbset | grep 'x' | tr 'a-z\"-' ' ' | awk '{printf $1;}'", shell=True))
+YRESOLUTION = int(check_output("fbset | grep 'x' | tr 'a-z\"-' ' ' | awk '{printf $2;}'", shell=True))
+
+# Debug
+if DEBUGMSG:
+    print("Screen resolution :          {}x{}".format(XRESOLUTION,YRESOLUTION))
+    print("Batteries 100% voltage:      {}".format(VOLT100))
+    print("Batteries 75% voltage:       {}".format(VOLT75))
+    print("Batteries 50% voltage:       {}".format(VOLT50))
+    print("Batteries 25% voltage:       {}".format(VOLT25))
+    print("Batteries dangerous voltage: {}".format(VOLT0))
+    print("ADC 100% value:              {}".format(ADC100))
+    print("ADC 75% value:               {}".format(ADC75))
+    print("ADC 50% value:               {}".format(ADC50))
+    print("ADC 25% value:               {}".format(ADC25))
+    print("ADC dangerous voltage value: {}".format(ADC0))
+
+# Positions for the choosen corner
+if ICON:
+    if CORNER == 1:
+        XPOS = XOFFSET
+        YPOS = YOFFSET
+    elif CORNER == 2:
+        XPOS = XRESOLUTION - XOFFSET
+        YPOS = YOFFSET
+    elif CORNER == 3:
+        XPOS = XRESOLUTION - XOFFSET
+        YPOS = YRESOLUTION - YOFFSET
+    elif CORNER == 4:
+        XPOS = XOFFSET
+        YPOS = YRESOLUTION - YOFFSET
+
+    # Initialisation
+    os.system("{}/pngview -b 0 -l 299999 -x {} -y {} {}/blank.png &".format(PNGVIEWPATH, XPOS, YPOS, ICONPATH))
 
 def changeicon(percent):
-    i = 0
-    killid = 0
-    os.system(PNGVIEWPATH + "/pngview -b 0 -l 3000" + percent + " -x 650 -y 5 " + ICONPATH + "/battery" + percent + ".png &")
-    if DEBUGMSG == 1:
-        print("Changed battery icon to " + percent + "%")
-    out = check_output("ps aux | grep pngview | awk '{ print $2 }'", shell=True)
-    nums = out.split('\n')
-    for num in nums:
-        i += 1
-        if i == 1:
-            killid = num
-            os.system("kill " + killid)		
+    if ICON:
+        os.system("{}/pngview -b 0 -l 3000{} -x {} -y {} {}/battery{}.png &".format(PNGVIEWPATH, percent, XPOS, YPOS, ICONPATH, percent))
 
-def changeled(x):
-    if LEDS == 1:
-        if x == "green":
+        if DEBUGMSG:
+            print("Changed battery icon to {}%".format(percent))
+
+        nums = check_output("ps aux | grep pngview | awk '{ print $1 }'", shell=True).split('\n')
+        os.system("kill {}".format(nums[0]))
+
+def changeled(led):
+    if LEDS:
+        if led == "green":
             GPIO.output(GOODVOLTPIN, GPIO.HIGH)
             GPIO.output(LOWVOLTPIN, GPIO.LOW)
-        elif x == "red":
+        elif led == "red":
             GPIO.output(GOODVOLTPIN, GPIO.LOW)
             GPIO.output(LOWVOLTPIN, GPIO.HIGH)
+
+def playclip(clip):
+    if CLIPS:
+        if clip == "alert" and WARNING != 1:
+            os.system("/usr/bin/omxplayer --no-osd --layer 999999 {}/lowbattalert.mp4 --alpha 160").format(ICONPATH)
+            WARNING = 1
+        elif clip == "shutdown":
+            os.system("/usr/bin/omxplayer --no-osd --layer 999999 {}/lowbattshutdown.mp4 --alpha 160;shutdown -h now").format(ICONPATH)
 
 def endProcess(signalnum = None, handler = None):
     GPIO.cleanup()
@@ -48,70 +85,55 @@ def initPins():
     GPIO.output(GOODVOLTPIN, GPIO.LOW)
     GPIO.output(LOWVOLTPIN, GPIO.LOW)
 
-if DEBUGMSG == 1:
-    print("Batteries 100% voltage:		" + str(VOLT100))
-    print("Batteries 75% voltage:		" + str(VOLT75))
-    print("Batteries 50% voltage:       	" + str(VOLT50))
-    print("Batteries 25% voltage:       	" + str(VOLT25))
-    print("Batteries dangerous voltage: 	" + str(VOLT0))
-    print("ADC 100% value:      	 	" + str(ADC100))
-    print("ADC 75% value:			" + str(ADC75))
-    print("ADC 50% value:			" + str(ADC50))
-    print("ADC 25% value:       		" + str(ADC25))
-    print("ADC dangerous voltage value: 	" + str(ADC0))
-
 # Prepare handlers for process exit
 signal.signal(signal.SIGTERM, endProcess)
 signal.signal(signal.SIGINT, endProcess)
 
-if LEDS == 1:
+if LEDS:
     GPIO.setmode(GPIO.BOARD)
     initPins()
 
-os.system(PNGVIEWPATH + "/pngview -b 0 -l 299999 -x 650 -y 5 " + ICONPATH + "/blank.png &")
-
 while True:
-    ret1 = readadc(ADCCHANNEL, SPICLK, SPIMOSI, SPIMISO, SPICS)
-    time.sleep(3)
-    ret2 = readadc(ADCCHANNEL, SPICLK, SPIMOSI, SPIMISO, SPICS)
-    time.sleep(3)
-    ret3 = readadc(ADCCHANNEL, SPICLK, SPIMOSI, SPIMISO, SPICS)
-    ret = ret1 + ret2 + ret3
-    ret = ret/3
+    # Calcul the average battey left
+    i = 0
+    ret = 0
+    while i < PRECISION:
+        ret += readadc(ADCCHANNEL, SPICLK, SPIMOSI, SPIMISO, SPICS)
+        i += 1
+        time.sleep(WAITING)
+    ret = ret/PRECISION
 
-    if DEBUGMSG == 1:
-        print("ADC value: " + str(ret) + " (" + str(((HIGHRESVAL+LOWRESVAL)*ret*(ADCVREF/1024))/HIGHRESVAL) + " V)")
+    # Force full charged battery for test
+    if FULLCHARGE:
+        ret = 999999
+
+    if DEBUGMSG:
+        voltage = (HIGHRESVAL+LOWRESVAL)*ret*(ADCVREF/1024)/HIGHRESVAL
+        print("ADC value: {} ({}V)".format(ret, voltage))
  
-    if ret < ADC0:
-        if status != 0:
-            changeicon("0")
-            changeled("red")
-            if CLIPS == 1:
-	        os.system("/usr/bin/omxplayer --no-osd --layer 999999  " + ICONPATH + "/lowbattshutdown.mp4 --alpha 160;shutdown -h now")
-        status = 0
-    elif ret < ADC25:
-        if status != 25:
-            changeled("red")
-            changeicon("25")
-            if warning != 1:
-		if CLIPS == 1:
-                    os.system("/usr/bin/omxplayer --no-osd --layer 999999  " + ICONPATH + "/lowbattalert.mp4 --alpha 160")
-                warning = 1
-        status = 25
-    elif ret < ADC50:
-        if status != 50:
-            changeled("green")
-            changeicon("50")
-        status = 50
-    elif ret < ADC75:
-        if status != 75:
-            changeled("green")
-            changeicon("75")
-        status = 75
-    else:
-        if status != 100:
-            changeled("green")
-            changeicon("100")      
-        status = 100
+    # Battery monitor
+    if ret < ADC0 and STATUS != 0:
+        changeled("red")
+        changeicon("0")
+        playclip("shutdown")
+        STATUS = 0
+    elif ret < ADC25 and STATUS != 25:
+        changeled("red")
+        changeicon("25")
+        playclip("alert")
+        STATUS = 25
+    elif ret < ADC50 and STATUS != 50:
+        changeled("green")
+        changeicon("50")
+        STATUS = 50
+    elif ret < ADC75 and STATUS != 75:
+        changeled("green")
+        changeicon("75")
+        STATUS = 75
+    elif STATUS != 100:
+        changeled("green")
+        changeicon("100")      
+        STATUS = 100
 
+    # Wainting for next loop
     time.sleep(REFRESH_RATE)
