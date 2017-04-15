@@ -13,11 +13,15 @@ SPICS = 24
 
 # Display some debug values when set to 1, and nothing when set to 0
 DEBUGMSG = 1
+# Force battery to 100% for testing purpose
+DEBUGMODE = 1
 
-# Force battery level to 100% for testing purpose
-FULLCHARGE = 1
+# Display (wifi and bluetooth are icon only)
+BATTERY = 1
+WIFI = 0
+BLUETOOTH = 0
 
-# Battery icon, LED or videoclips? Or all of them?
+# Battery Icon, LED, or videoclips or all of them
 LEDS = 0
 ICON = 1
 CLIPS = 0
