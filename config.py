@@ -2,8 +2,9 @@
 " Edit below this line to fit your needs
 """
 # Path to pngview (raspidmx) and icons
-PNGVIEWPATH = "/etc/recalboxBatteryMonitor/raspidmx/pngview"
-ICONPATH = "/etc/recalboxBatteryMonitor/icons"
+PNGVIEWPATH = "/etc/recalbox-monitor/raspidmx/pngview"
+ICONPATH = "/etc/recalbox-monitor/icons/default"
+VIDEOPATH = "/etc/recalbox-monitor/videos/default"
 
 # Change the association SPI/GPIO as desired 
 SPICLK = 23
@@ -37,7 +38,7 @@ YOFFSET = 5
 GOODVOLTPIN = 18
 LOWVOLTPIN = 17
 
-# Fully charged voltage, voltage at the percentage steps and shutdown voltage. This is where you edit when finetuning the batterymonitor
+# Fully charged voltage, voltage at the percentage steps and shutdown voltage. This is where you edit when finetuning the -monitor
 # by using the monitor.py script.
 VOLT100 = 4.2
 VOLT75 = 3.7

@@ -9,29 +9,30 @@ from pprint import pprint
 from mcp3008 import *
 
 WARNING = 0
-STATUS = 999
-LAYER = 299999
-DICTIONNARY = dict({"battery":0, "wifi":0, "bluetooth":0, })
+BATTSTATUS = 999
+WIFISTATUS = ""
+BTSTATUS = ""
+DICTIONNARY = dict({"battery":0, "wifi":0, "bluetooth":0})
 
 # Get the screen resolution on X and Y axis
-XRESOLUTION = int(check_output("fbset | grep 'x' | tr 'a-z\"-' ' ' | awk '{printf $1;}'", shell=True))
-YRESOLUTION = int(check_output("fbset | grep 'x' | tr 'a-z\"-' ' ' | awk '{printf $2;}'", shell=True))
+XRESOLUTION = int(check_output("fbset | grep 'x' | tr 'a-z\"-' ' ' | awk '{ printf $1 }'", shell=True))
+YRESOLUTION = int(check_output("fbset | grep 'x' | tr 'a-z\"-' ' ' | awk '{ printf $2 }'", shell=True))
 
 # Debug
 if DEBUGMSG:
     print("Screen resolution :          {}x{}".format(XRESOLUTION,YRESOLUTION))
-    print("Batteries 100% voltage:      {}".format(VOLT100))
-    print("Batteries 75% voltage:       {}".format(VOLT75))
-    print("Batteries 50% voltage:       {}".format(VOLT50))
-    print("Batteries 25% voltage:       {}".format(VOLT25))
-    print("Batteries dangerous voltage: {}".format(VOLT0))
+    print("Battery 100% voltage:      {}".format(VOLT100))
+    print("Battery 75% voltage:       {}".format(VOLT75))
+    print("Battery 50% voltage:       {}".format(VOLT50))
+    print("Battery 25% voltage:       {}".format(VOLT25))
+    print("Battery dangerous voltage: {}".format(VOLT0))
     print("ADC 100% value:              {}".format(ADC100))
     print("ADC 75% value:               {}".format(ADC75))
     print("ADC 50% value:               {}".format(ADC50))
     print("ADC 25% value:               {}".format(ADC25))
     print("ADC dangerous voltage value: {}".format(ADC0))
 
-# Positions for the choosen corner
+# Coordinates for the choosen corner
 if ICON:
     if CORNER == 1:
         XPOS = XOFFSET
@@ -46,37 +47,40 @@ if ICON:
         XPOS = XOFFSET
         YPOS = YRESOLUTION - YOFFSET
 
-
 def changeIcon(icon, state):
+    """ Show an icon and can update it 
+    icon : name of the icon (ex : wifi)
+    state : state of the icon (ex : connected)
+
+    Create a Python subprocess to show the icon using "pngview"binary.
+
+    PID of the subprocess is save, next time the same icon need to be updated,
+    "pngview" is call again. The previous PID is use to terminate the subprocess and new PID is save.
+
+    This behavior of superposition is used to avoid a "empty icon" during the transition between two statess.
+    """
     if ICON:
-        global LAYER
         global DICTIONNARY
 
-        #LAYER -= 1 # Useless ???
+        # Pngview command and arguments
         cmd = '{}/pngview'.format(PNGVIEWPATH)
         arg1 = '-b 0'
-        arg2 = '-l {}'.format(LAYER)
+        arg2 = '-l 299999'
         arg3 = '-x {}'.format(XPOS)
         arg4 = '-y {}'.format(YPOS)
         img = '{}/{}_{}.png'.format(ICONPATH, icon, state)
 
-        # New image
-        popen = subprocess.Popen([cmd, arg1, arg2, arg3, arg4, img])
+        # Create "pngview" subprocess 
+        popen = subprocess.Popen([cmd, arg1, arg2, arg3, arg4, img]) 
         time.sleep(2)
-        
 
-        #os.system("{}/pngview -b 0 -l {} -x {} -y {} {}/{}_{}.png &".format(PNGVIEWPATH, LAYER, XPOS, YPOS, ICONPATH, icon, state))
-
-        # Get the last id of pngview for this specific icon
+        # Terminate the previous subprocess if it exists
         pid = DICTIONNARY[icon]
-        # Remove previous icon if it exist
         if pid != 0:
-            #os.system("kill {}".format(pid))
             os.kill(pid, signal.SIGTERM)
-        # Get the process id of the new image
-        #num = check_output("pgrep -f pngview | tail -1 | tr -d '\n'", shell=True) # TODO > Ne retourne pas le bon id ???
+        
+        # Get the PID of the new subprocess and update the dictionnary
         new_pid = popen.pid
-        # Update the dictionnary
         if new_pid != "":
             DICTIONNARY[icon] = new_pid
             
@@ -87,6 +91,11 @@ def changeIcon(icon, state):
             print("Pngview pid is now {} for {} icon".format(new_pid, icon))
 
 def changeLed(led):
+    """ Change LED color
+    led : color of the led (green or red)
+ 
+    Send a signal through the GPIOs to change the led color
+    """
     if LEDS:
         if led == "green":
             GPIO.output(GOODVOLTPIN, GPIO.HIGH)
@@ -95,85 +104,116 @@ def changeLed(led):
             GPIO.output(GOODVOLTPIN, GPIO.LOW)
             GPIO.output(LOWVOLTPIN, GPIO.HIGH)
 
-def playClip(clip, warn):
+def playClip(level):
+    """ Display a video
+    level : level of alert about battery level (warning or critical)
+
+    The critical level add the shutdown function
+    """
+    global WARNING
+
     if CLIPS:
-        if clip == "alert" and warn != 1:
-            os.system("/usr/bin/omxplayer --no-osd --layer 999999 {}/lowbattalert.mp4 --alpha 160").format(ICONPATH)
-            warn = 1
-        elif clip == "shutdown":
-            os.system("/usr/bin/omxplayer --no-osd --layer 999999 {}/lowbattshutdown.mp4 --alpha 160;shutdown -h now").format(ICONPATH)
+        if level == "warning" and WARNING != 1:
+            os.system("/usr/bin/omxplayer --no-osd --layer 999999 {}/lowbatt_warning.mp4 --alpha 160".format(VIDEOPATH))
+            WARNING = 1
+        elif level == "critical":
+            os.system("/usr/bin/omxplayer --no-osd --layer 999999 {}/lowbatt_critical.mp4 --alpha 160;shutdown -h now".format(VIDEOPATH))
 
 def checkWifi():
-    if WIFI:
-        wifiStatus = check_output("LC_ALL=C nmcli -f WIFI,STATE -m multiline g | grep WIFI | awk '{ printf $2 }'", shell=True)
-        wifiConnection = check_output("LC_ALL=C nmcli -f WIFI,STATE -m multiline g | grep STATE | awk '{ printf $2 }'", shell=True)
+    """ Manage the WIFI icon
 
-        if wifiStatus == "enabled":
-            changeIcon("wifi", wifiConnection)
+    Use "nmcli" commands
+
+    Checking if wifi is activated or not.
+    If wifi is activated, checking the connection to display the right icon
+    """
+    global WIFISTATUS
+
+    wifi_status = check_output("LC_ALL=C nmcli -f WIFI,STATE -m multiline g | grep WIFI | awk '{ printf $2 }'", shell=True)
+    if wifi_status == "disabled":
+    	changeIcon("wifi", "disabled")
+    else:
+    	wifi_connection = check_output("LC_ALL=C nmcli -f WIFI,STATE -m multiline g | grep STATE | awk '{ printf $2 }'", shell=True)
+    	# Avoid updating icon if not necessary
+        if WIFISTATUS != wifi_connection:
+    		changeIcon("wifi", wifi_connection)
+    		WIFISTATUS = wifi_connection
 
 def checkBluetooth():
-    if BLUETOOTH:
-        btStatus = check_output("systemctl is-active bluetooth", shell=True)
-        btConnection = check_output("hcitool con | awk '{ printf $2 }'", shell=True)
-        if btStatus == "active":
-            if btConnection != "":
+    """ Manage the BLUETOOTH icon
+
+    Use "systemctl" and "hcitool commands"
+    """
+    global BTSTATUS
+    
+    bt_status = check_output("systemctl is-active bluetooth", shell=True)
+    if bt_status == "active":
+        bt_connection = check_output("hcitool con | awk '{ printf $2 }'", shell=True)
+        # Avoid updating icon if not necessary
+        if bt_connection != BTSTATUS:
+            if bt_connection != "":
                 changeIcon("bluetooth", "pair")
             else:
                 changeIcon("bluetooth", "none")
+            BTSTATUS = bt_connection
 
 def checkBattery():
-    if BATTERY:
-        global STATUS
-        global WARNING
+    """ Manage the BATTERY icon
 
-        # Calcul the average battey left
-        ret = 0
-        for i in range(1, PRECISION):
-            ret += readadc(ADCCHANNEL, SPICLK, SPIMOSI, SPIMISO, SPICS)
-            time.sleep(WAITING)
-        ret = ret/PRECISION
+    Use "readadc" command
+    """
+    global BATTSTATUS
+    global WARNING
 
-        # Test mode
-        if DEBUGMODE:
-            if STATUS == 100:
-                ret = ADC75 - 1 # 75%
-            elif STATUS == 75:
-                ret = ADC50 - 1 # 50%
-            elif STATUS == 50:
-                ret = ADC25 - 1 # 25%
-            elif STATUS == 25:
-                ret = ADC0 - 1 # Near 0%
-            else:
-                ret = ADC75 + 1 # 100%
+    # Calcul the average battey left
+    ret = 0
+    for i in range(1, PRECISION):
+        ret += readadc(ADCCHANNEL, SPICLK, SPIMOSI, SPIMISO, SPICS)
+        time.sleep(WAITING)
+    ret = ret/PRECISION
 
-        if DEBUGMSG:
-            voltage = (HIGHRESVAL+LOWRESVAL)*ret*(ADCVREF/1024)/HIGHRESVAL
-            print("ADC value: {} ({}V)".format(ret, voltage))
-            print("Battery level : {}%".format(STATUS))
+    # Loop over battery level for testing purpose
+    if DEBUGMODE:
+        if BATTSTATUS == 100:
+            ret = ADC75 - 1 # 75%
+        elif BATTSTATUS == 75:
+            ret = ADC50 - 1 # 50%
+        elif BATTSTATUS == 50:
+            ret = ADC25 - 1 # 25%
+        elif BATTSTATUS == 25:
+            ret = ADC0 - 1 # Near 0%
+        else:
+            ret = ADC75 + 1 # 100%
 
-        # Battery monitor
-        if ret < ADC0 and STATUS != 0:
-            changeLed("red")
-            changeIcon("battery", "0")
-            playClip("shutdown", WARNING)
-            STATUS = 0
-        elif ret < ADC25 and STATUS != 25:
-            changeLed("red")
-            changeIcon("battery", "25")
-            playClip("alert", WARNING)
-            STATUS = 25
-        elif ret < ADC50 and STATUS != 50:
-            changeLed("green")
-            changeIcon("battery", "50")
-            STATUS = 50
-        elif ret < ADC75 and STATUS != 75:
-            changeLed("green")
-            changeIcon("battery", "75")
-            STATUS = 75
-        elif STATUS != 100:
-            changeLed("green")
-            changeIcon("battery", "100")      
-            STATUS = 100
+    # Debug
+    if DEBUGMSG:
+        voltage = (HIGHRESVAL+LOWRESVAL)*ret*(ADCVREF/1024)/HIGHRESVAL
+        print("ADC value: {} ({}V)".format(ret, voltage))
+        print("Battery level : {}%".format(BATTSTATUS))
+
+    # Battery monitor
+    if ret < ADC0 and BATTSTATUS != 0:
+        changeLed("red")
+        changeIcon("battery", "0")
+        playClip("critical")
+        BATTSTATUS = 0
+    elif ret < ADC25 and BATTSTATUS != 25:
+        changeLed("red")
+        changeIcon("battery", "25")
+        playClip("warning")
+        BATTSTATUS = 25
+    elif ret < ADC50 and BATTSTATUS != 50:
+        changeLed("green")
+        changeIcon("battery", "50")
+        BATTSTATUS = 50
+    elif ret < ADC75 and BATTSTATUS != 75:
+        changeLed("green")
+        changeIcon("battery", "75")
+        BATTSTATUS = 75
+    elif BATTSTATUS != 100:
+        changeLed("green")
+        changeIcon("battery", "100")      
+        BATTSTATUS = 100
 
 def endProcess(signalnum = None, handler = None):
     GPIO.cleanup()
@@ -197,14 +237,18 @@ if LEDS:
 
 # Main function
 while True:
+    if WIFI:
+        checkWifi()
     
-    checkWifi()
-    checkBluetooth()
-    checkBattery()
+    if BLUETOOTH:
+        checkBluetooth()
+    
+    if BATTERY:
+        checkBattery()
 
     # Debug
     if DEBUGMSG:
-        pprint("GLOBAL Variables are : \nWARNING = {}\nSTATUS = {}\nLAYER = {}\n PID = {}".format(WARNING, STATUS, LAYER, DICTIONNARY))
+        pprint("GLOBAL Variables are : WARNING = {} STATUS = {} LAYER = {} PID = {}".format(WARNING, STATUS, LAYER, DICTIONNARY))
 
     # Wainting for next loop
     time.sleep(REFRESH_RATE)

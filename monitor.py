@@ -2,7 +2,6 @@
 import RPi.GPIO as GPIO
 import time
 from time import localtime, strftime
-
 from mcp3008 import *
 
 print("Batteries 100% voltage:      {}".format(VOLT100))
@@ -18,6 +17,8 @@ print("ADC dangerous voltage value: {}".format(ADC0))
 print(" ")
 print("Time           ADC          Volt")
 
+f = open("monitor.csv", "w")
+
 while True:
     # Calcul the average battey left
     i = 0
@@ -26,9 +27,11 @@ while True:
         ret += readadc(ADCCHANNEL, SPICLK, SPIMOSI, SPIMISO, SPICS)
         i += 1
         time.sleep(WAITING)
+    
     ret = ret/PRECISION
+    v = (HIGHRESVAL+LOWRESVAL)*ret*(ADCVREF/1024)/HIGHRESVAL
+    t = strftime("%H:%M", localtime())
 
-    voltage = (HIGHRESVAL+LOWRESVAL)*ret*(ADCVREF/1024)/HIGHRESVAL
-    print(strftime("%H:%M", localtime()) + "          {}          {}".format(ret, voltage))
-
+    f.write("{};{}\n".format(v,t))
+    
     time.sleep(170)
