@@ -63,19 +63,23 @@ def changeIcon(icon, state):
     if ICON:
         global DICTIONNARY
 
+        # Initialisation
+        x_pos = XPOS
+        y_pos = YPOS
+
         # Test
         if CORNER == 2:
             if icon == "wifi":
-                XPOS -= 5
+                x_pos -= 5
             elif icon == "bluetooth":
-                XPOS -= 10
+                x_pos -= 10
 
         # Pngview command and arguments
         cmd = '{}/pngview'.format(PNGVIEWPATH)
         arg1 = '-b 0'
         arg2 = '-l 299999'
-        arg3 = '-x {}'.format(XPOS)
-        arg4 = '-y {}'.format(YPOS)
+        arg3 = '-x {}'.format(x_pos)
+        arg4 = '-y {}'.format(y_pos)
         img = '{}/{}_{}.png'.format(ICONPATH, icon, state)
 
         # Create "pngview" subprocess
