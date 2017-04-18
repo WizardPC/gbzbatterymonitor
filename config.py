@@ -19,8 +19,8 @@ DEBUGMODE = 1
 
 # Display (wifi and bluetooth are icon only)
 BATTERY = 1
-WIFI = 0
-BLUETOOTH = 0
+WIFI = 1
+BLUETOOTH = 1
 
 # Battery Icon, LED, or videoclips or all of them
 LEDS = 0
@@ -28,7 +28,7 @@ ICON = 1
 CLIPS = 0
 
 # Corner is (1)TopLeft, (2)TopRight , (3)BottomRight, (4)BottomLeft
-CORNER=1
+CORNER = 2
 
 # Offset position from corner
 XOFFSET = 0
